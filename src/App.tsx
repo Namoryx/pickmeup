@@ -45,8 +45,10 @@ const GameLogic = () => {
 };
 
 export default function App() {
-  const { score, coins, isGrabbing, setGrabbing, useCoin, resetGame, addScore } = useGameStore();
+  const { score, coins, isGrabbing, setGrabbing, useCoin, resetGame, setMovement, movement } = useGameStore();
   const [prizes, setPrizes] = useState<any[]>([]);
+  const joystickRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     generatePrizes();
@@ -86,17 +88,42 @@ export default function App() {
     }
   };
 
+  const handleJoystickMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!joystickRef.current || !isDragging) return;
+    const rect = joystickRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const deltaX = clientX - centerX;
+    const deltaY = clientY - centerY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const maxDistance = rect.width / 2;
+    
+    const normalizedX = Math.max(-1, Math.min(1, deltaX / maxDistance));
+    const normalizedY = Math.max(-1, Math.min(1, deltaY / maxDistance));
+    
+    setMovement({ x: normalizedX, z: normalizedY });
+  };
+
+  const stopJoystick = () => {
+    setIsDragging(false);
+    setMovement({ x: 0, z: 0 });
+  };
+
   return (
-    <div className="relative w-full h-screen bg-slate-950 font-sans select-none overflow-hidden">
+    <div className="relative w-full h-screen bg-slate-950 font-sans select-none overflow-hidden touch-none">
       {/* 3D Scene */}
       <Canvas shadows>
         <color attach="background" args={['#0a0a0a']} />
         <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={40} />
         <OrbitControls 
-          enablePan={true} 
+          enablePan={false} 
           maxPolarAngle={Math.PI / 1.8} 
           minDistance={8} 
-          maxDistance={30}
+          maxDistance={20}
           target={[0, 4, 0]}
           makeDefault
         />
@@ -134,104 +161,74 @@ export default function App() {
       </Canvas>
 
       {/* UI Overlay */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6">
+      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4">
         {/* Header Stats */}
         <div className="flex justify-between items-start pointer-events-auto">
           <motion.div 
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="glass-panel p-4 flex items-center gap-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="glass-panel p-3 flex items-center gap-3"
           >
-            <div className="bg-yellow-500/20 p-2 rounded-lg">
-              <Trophy className="w-6 h-6 text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Score</p>
-              <p className="text-2xl font-black text-white tabular-nums">{score}</p>
-            </div>
+            <Trophy className="w-5 h-5 text-yellow-400" />
+            <p className="text-xl font-black text-white">{score}</p>
           </motion.div>
 
           <motion.div 
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="glass-panel p-4 flex items-center gap-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="glass-panel p-3 flex items-center gap-3"
           >
-            <div className="bg-blue-500/20 p-2 rounded-lg">
-              <Coins className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Coins</p>
-              <p className="text-2xl font-black text-white tabular-nums">{coins}</p>
-            </div>
+            <Coins className="w-5 h-5 text-blue-400" />
+            <p className="text-xl font-black text-white">{coins}</p>
           </motion.div>
         </div>
 
-        {/* Controls Hint */}
-        <div className="flex flex-col items-center gap-4">
-          <AnimatePresence>
-            {coins === 0 && (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="bg-red-500/20 border border-red-500/50 px-6 py-2 rounded-full text-red-400 font-bold backdrop-blur-sm"
-              >
-                OUT OF COINS!
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* Mobile Controls */}
+        <div className="flex justify-between items-end pb-8 pointer-events-auto">
+          {/* Joystick */}
+          <div 
+            ref={joystickRef}
+            className="w-32 h-32 rounded-full bg-white/10 backdrop-blur-md border border-white/20 relative flex items-center justify-center"
+            onTouchStart={() => setIsDragging(true)}
+            onTouchMove={handleJoystickMove}
+            onTouchEnd={stopJoystick}
+            onMouseDown={() => setIsDragging(true)}
+            onMouseMove={handleJoystickMove}
+            onMouseUp={stopJoystick}
+            onMouseLeave={stopJoystick}
+          >
+            <motion.div 
+              animate={{ 
+                x: movement.x * 40, 
+                y: movement.z * 40 
+              }}
+              transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+              className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 shadow-xl border border-white/30"
+            />
+          </div>
 
-          <div className="flex gap-4 pointer-events-auto">
+          {/* Grab Button */}
+          <div className="flex flex-col items-center gap-4">
             <button
               onClick={resetGame}
-              className="glass-panel p-4 hover:bg-white/20 transition-colors group"
-              title="Reset Game"
+              className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/20 active:scale-90 transition-transform"
             >
-              <RefreshCw className="w-8 h-8 text-white group-active:rotate-180 transition-transform duration-500" />
+              <RefreshCw className="w-6 h-6 text-white" />
             </button>
-
+            
             <button
               onClick={handleGrab}
               disabled={isGrabbing || coins <= 0}
               className={`
-                px-12 py-4 rounded-2xl font-black text-xl tracking-widest uppercase flex items-center gap-3 transition-all
+                w-24 h-24 rounded-full font-black text-lg uppercase flex items-center justify-center transition-all shadow-2xl
                 ${isGrabbing || coins <= 0 
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:scale-105 active:scale-95 neon-border'}
+                  ? 'bg-slate-800 text-slate-500' 
+                  : 'bg-gradient-to-b from-red-500 to-red-700 text-white border-4 border-red-400/50 active:scale-90 active:brightness-125'}
               `}
             >
-              <Target className={`w-6 h-6 ${isGrabbing ? 'animate-ping' : ''}`} />
-              {isGrabbing ? 'GRABBING...' : 'PUSH TO GRAB'}
+              PUSH
             </button>
           </div>
-
-          <div className="glass-panel px-6 py-3 flex gap-8 text-slate-400 text-sm font-medium">
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1">
-                <kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-xs">W</kbd>
-                <kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-xs">A</kbd>
-                <kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-xs">S</kbd>
-                <kbd className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-xs">D</kbd>
-              </div>
-              <span>Move Claw</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <kbd className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-xs">SPACE</kbd>
-              <span>Grab</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Controls (Visual Only for now) */}
-      <div className="absolute bottom-32 left-6 pointer-events-auto lg:hidden">
-        <div className="grid grid-cols-3 gap-2">
-          <div />
-          <button className="glass-panel p-3 active:bg-white/30"><ArrowUp className="w-6 h-6" /></button>
-          <div />
-          <button className="glass-panel p-3 active:bg-white/30"><ArrowLeft className="w-6 h-6" /></button>
-          <button className="glass-panel p-3 active:bg-white/30"><ArrowDown className="w-6 h-6" /></button>
-          <button className="glass-panel p-3 active:bg-white/30"><ArrowRight className="w-6 h-6" /></button>
         </div>
       </div>
     </div>

@@ -4,34 +4,115 @@ import { useBox, useSphere, useCompoundBody } from '@react-three/cannon';
 import * as THREE from 'three';
 import { useGameStore } from './store';
 
-// Physics-based Prize
-export const Prize = ({ position, color, type, id }: { position: [number, number, number], color: string, type: 'sphere' | 'box', id: number }) => {
-  const [ref] = type === 'sphere' 
-    ? useSphere(() => ({ mass: 0.8, position, args: [0.4], linearDamping: 0.5, angularDamping: 0.5 }), useRef<THREE.Mesh>(null))
-    : useBox(() => ({ mass: 0.8, position, args: [0.7, 0.7, 0.7], linearDamping: 0.5, angularDamping: 0.5 }), useRef<THREE.Mesh>(null));
-
-  return (
-    <mesh ref={ref as any} castShadow>
-      {type === 'sphere' ? <sphereGeometry args={[0.4, 16, 16]} /> : <boxGeometry args={[0.7, 0.7, 0.7]} />}
+// Visual part of the prize to keep code DRY
+const PrizeVisual = React.forwardRef(({ color, type }: { color: string, type: 'sphere' | 'box' }, ref: any) => (
+  <group ref={ref}>
+    {/* Visual representation of a "Doll" */}
+    <mesh castShadow>
+      {type === 'sphere' ? <sphereGeometry args={[0.45, 16, 16]} /> : <boxGeometry args={[0.7, 0.7, 0.7]} />}
       <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} />
     </mesh>
-  );
+    
+    {/* Head/Ears for a "Bear" look */}
+    <group position={[0, 0.4, 0]}>
+      <mesh castShadow>
+        <sphereGeometry args={[0.25, 12, 12]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {/* Ears */}
+      <mesh position={[0.18, 0.18, 0]} castShadow>
+        <sphereGeometry args={[0.08, 8, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[-0.18, 0.18, 0]} castShadow>
+        <sphereGeometry args={[0.08, 8, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {/* Eyes */}
+      <mesh position={[0.08, 0.05, 0.2]} castShadow>
+        <sphereGeometry args={[0.02, 4, 4]} />
+        <meshStandardMaterial color="#000" />
+      </mesh>
+      <mesh position={[-0.08, 0.05, 0.2]} castShadow>
+        <sphereGeometry args={[0.02, 4, 4]} />
+        <meshStandardMaterial color="#000" />
+      </mesh>
+    </group>
+    
+    {/* Simple Limbs */}
+    <mesh position={[0.25, -0.2, 0]} castShadow>
+      <sphereGeometry args={[0.12, 8, 8]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+    <mesh position={[-0.25, -0.2, 0]} castShadow>
+      <sphereGeometry args={[0.12, 8, 8]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  </group>
+));
+
+const PrizeSphere = ({ position, color }: { position: [number, number, number], color: string }) => {
+  const [ref] = useSphere(() => ({ 
+    mass: 1.2, 
+    position, 
+    args: [0.45], 
+    linearDamping: 0.5, 
+    angularDamping: 0.5,
+    friction: 0.8,
+    restitution: 0.1
+  }), useRef<THREE.Group>(null));
+  return <PrizeVisual ref={ref} color={color} type="sphere" />;
 };
 
-// The Claw Component
+const PrizeBox = ({ position, color }: { position: [number, number, number], color: string }) => {
+  const [ref] = useBox(() => ({ 
+    mass: 1.2, 
+    position, 
+    args: [0.7, 0.7, 0.7], 
+    linearDamping: 0.5, 
+    angularDamping: 0.5,
+    friction: 0.8,
+    restitution: 0.1
+  }), useRef<THREE.Group>(null));
+  return <PrizeVisual ref={ref} color={color} type="box" />;
+};
+
+export const Prize = (props: { position: [number, number, number], color: string, type: 'sphere' | 'box', id: number }) => {
+  if (props.type === 'sphere') return <PrizeSphere {...props} />;
+  return <PrizeBox {...props} />;
+};
+
+// The Claw Component (Visual Update: Mechanical Detail & Hook Shape)
 export const Claw = () => {
-  const { isGrabbing, setGrabbing } = useGameStore();
+  const { isGrabbing, setGrabbing, movement } = useGameStore();
   const [pos, setPos] = useState<[number, number, number]>([0, 5, 0]);
   const [isOpen, setIsOpen] = useState(true);
+  const [hasHit, setHasHit] = useState(false);
   
   const clawRef = useRef<THREE.Group>(null);
   
-  // Use a single box for physics to ensure stability
+  // Main body physics
   const [ref, api] = useBox(() => ({
     type: 'Kinematic',
     position: [0, 5, 0],
     args: [0.8, 0.4, 0.8],
+    onCollide: (e) => {
+      // If we hit something while dropping, we should consider stopping
+      if (e.contact.impactVelocity > 0.1) {
+        setHasHit(true);
+      }
+    }
   }), clawRef);
+
+  // Tip sensor physics (to detect floor/prizes)
+  const [sensorRef, sensorRefApi] = useBox(() => ({
+    type: 'Kinematic',
+    isTrigger: true,
+    args: [0.5, 0.2, 0.5],
+    onCollide: () => {
+      setHasHit(true);
+    }
+  }), useRef<THREE.Mesh>(null));
 
   const speed = 0.15;
   const keys = useRef<{ [key: string]: boolean }>({});
@@ -51,10 +132,16 @@ export const Claw = () => {
     if (isGrabbing) return;
 
     let [x, y, z] = pos;
+    
+    // Keyboard Input
     if (keys.current['ArrowLeft'] || keys.current['a']) x -= speed;
     if (keys.current['ArrowRight'] || keys.current['d']) x += speed;
     if (keys.current['ArrowUp'] || keys.current['w']) z -= speed;
     if (keys.current['ArrowDown'] || keys.current['s']) z += speed;
+
+    // Joystick Input
+    x += movement.x * speed;
+    z += movement.z * speed;
 
     x = Math.max(-3.5, Math.min(3.5, x));
     z = Math.max(-3.5, Math.min(3.5, z));
@@ -66,16 +153,27 @@ export const Claw = () => {
   useEffect(() => {
     if (isGrabbing) {
       let active = true;
+      setHasHit(false);
+
       const drop = async () => {
         if (!active) return;
         
-        // 1. Drop
-        const dropDepth = 4.5;
-        const dropSteps = 60;
+        // 1. Drop until hit or max depth
+        const maxDepth = 4.8;
+        const dropSteps = 100;
+        let currentY = 5;
+        
         for (let i = 0; i <= dropSteps && active; i++) {
-          const newY = 5 - (i / dropSteps) * dropDepth;
-          setPos(p => [p[0], newY, p[2]]);
-          api.position.set(pos[0], newY, pos[2]);
+          currentY = 5 - (i / dropSteps) * maxDepth;
+          setPos(p => [p[0], currentY, p[2]]);
+          api.position.set(pos[0], currentY, pos[2]);
+          
+          // Check if we hit something (using a ref for hasHit to avoid closure issues)
+          // But since we are in a loop, we can just use the state if we are careful
+          // Actually, state updates won't be reflected in this loop immediately.
+          // Let's use a ref for hasHit.
+          if (hasHitRef.current) break;
+          
           await new Promise(r => setTimeout(r, 15));
         }
         
@@ -83,9 +181,11 @@ export const Claw = () => {
         setIsOpen(false);
         await new Promise(r => setTimeout(r, 800));
 
-        // 2. Lift
-        for (let i = 0; i <= dropSteps && active; i++) {
-          const newY = (5 - dropDepth) + (i / dropSteps) * dropDepth;
+        // 2. Lift back to 5
+        const startY = currentY;
+        const liftSteps = 60;
+        for (let i = 0; i <= liftSteps && active; i++) {
+          const newY = startY + (i / liftSteps) * (5 - startY);
           setPos(p => [p[0], newY, p[2]]);
           api.position.set(pos[0], newY, pos[2]);
           await new Promise(r => setTimeout(r, 15));
@@ -96,13 +196,13 @@ export const Claw = () => {
         const targetX = -3.8;
         const targetZ = -3.8;
         const moveSteps = 50;
-        const startX = pos[0];
-        const startZ = pos[2];
+        const sX = pos[0];
+        const sZ = pos[2];
 
         for (let i = 0; i <= moveSteps && active; i++) {
           const t = i / moveSteps;
-          const newX = startX + (targetX - startX) * t;
-          const newZ = startZ + (targetZ - startZ) * t;
+          const newX = sX + (targetX - sX) * t;
+          const newZ = sZ + (targetZ - sZ) * t;
           setPos(p => [newX, 5, newZ]);
           api.position.set(newX, 5, newZ);
           await new Promise(r => setTimeout(r, 15));
@@ -122,13 +222,39 @@ export const Claw = () => {
     }
   }, [isGrabbing]);
 
+  // Ref for collision detection to use inside async loop
+  const hasHitRef = useRef(false);
+  useEffect(() => {
+    hasHitRef.current = hasHit;
+  }, [hasHit]);
+
+  // Update sensor position to follow claw
+  useFrame(() => {
+    sensorRefApi.position.set(pos[0], pos[1] - 1.5, pos[2]);
+  });
+
   return (
     <group>
-      {/* Cable */}
-      <mesh position={[pos[0], (9.5 + pos[1]) / 2, pos[2]]}>
-        <cylinderGeometry args={[0.02, 0.02, 9.5 - pos[1]]} />
-        <meshStandardMaterial color="#111" metalness={0.5} />
+      {/* Sensor (Invisible) */}
+      <mesh ref={sensorRef as any}>
+        <boxGeometry args={[0.5, 0.2, 0.5]} />
+        <meshStandardMaterial transparent opacity={0} />
       </mesh>
+
+      {/* Coiled Cable Visual */}
+      <group position={[pos[0], (9.5 + pos[1]) / 2, pos[2]]}>
+        {Array.from({ length: 20 }).map((_, i) => (
+          <mesh key={i} position={[Math.sin(i * 1.5) * 0.05, (i / 20 - 0.5) * (9.5 - pos[1]), Math.cos(i * 1.5) * 0.05]} rotation={[0, 0, 0.2]}>
+            <torusGeometry args={[0.04, 0.01, 8, 16]} />
+            <meshStandardMaterial color="#222" />
+          </mesh>
+        ))}
+        {/* Main straight cable core */}
+        <mesh>
+          <cylinderGeometry args={[0.01, 0.01, 9.5 - pos[1]]} />
+          <meshStandardMaterial color="#111" />
+        </mesh>
+      </group>
 
       {/* Gantry */}
       <mesh position={[0, 9.5, pos[2]]}>
@@ -144,27 +270,39 @@ export const Claw = () => {
       <group ref={ref as any}>
         {/* Mechanical Base */}
         <mesh castShadow>
-          <cylinderGeometry args={[0.4, 0.5, 0.5, 6]} />
-          <meshStandardMaterial color="#444" metalness={0.8} roughness={0.2} />
+          <cylinderGeometry args={[0.4, 0.5, 0.6, 8]} />
+          <meshStandardMaterial color="#333" metalness={0.9} roughness={0.1} />
         </mesh>
-        <mesh position={[0, 0.3, 0]}>
-          <sphereGeometry args={[0.2]} />
-          <meshStandardMaterial color="#222" />
+        
+        {/* Status Light */}
+        <mesh position={[0, 0.35, 0]}>
+          <sphereGeometry args={[0.15, 16, 16]} />
+          <meshStandardMaterial 
+            color={isGrabbing ? "#ff0000" : "#00ff00"} 
+            emissive={isGrabbing ? "#ff0000" : "#00ff00"} 
+            emissiveIntensity={2} 
+          />
+        </mesh>
+        
+        {/* Internal Gears Visual */}
+        <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.3, 0.3, 0.1, 12]} />
+          <meshStandardMaterial color="#555" metalness={1} />
         </mesh>
 
-        {/* 4 Curved Arms for realism */}
-        {[0, 90, 180, 270].map((angle, i) => (
+        {/* 3 Thin Wire Arms (Matching Image) */}
+        {[0, 120, 240].map((angle, i) => (
           <group key={i} rotation={[0, THREE.MathUtils.degToRad(angle), 0]}>
-            <group position={[0.35, -0.1, 0]} rotation={[0, 0, isOpen ? 0.7 : -0.2]}>
-              {/* Upper Arm */}
-              <mesh castShadow position={[0, -0.4, 0]}>
-                <boxGeometry args={[0.1, 0.8, 0.15]} />
-                <meshStandardMaterial color="#888" metalness={0.9} roughness={0.1} />
+            <group position={[0.15, 0, 0]} rotation={[0, 0, isOpen ? 0.2 : -0.8]}>
+              {/* Thin Wire Arm - Curved like the image */}
+              <mesh castShadow position={[0.15, -0.6, 0]} rotation={[0, 0, 0.3]}>
+                <boxGeometry args={[0.02, 1.2, 0.02]} />
+                <meshStandardMaterial color="#ddd" metalness={1} roughness={0.1} />
               </mesh>
-              {/* Lower Hook */}
-              <mesh castShadow position={[0.15, -0.8, 0]} rotation={[0, 0, 0.8]}>
-                <boxGeometry args={[0.1, 0.4, 0.15]} />
-                <meshStandardMaterial color="#888" metalness={0.9} roughness={0.1} />
+              {/* Hook Tip */}
+              <mesh castShadow position={[0.3, -1.2, 0]} rotation={[0, 0, 1.2]}>
+                <boxGeometry args={[0.02, 0.4, 0.02]} />
+                <meshStandardMaterial color="#ddd" metalness={1} />
               </mesh>
             </group>
           </group>
