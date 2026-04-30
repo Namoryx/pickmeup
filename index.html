@@ -1,363 +1,161 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>2인 대결 3D 인형뽑기 (점수 버그 픽스)</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; outline: none; box-sizing: border-box; }
-        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Arial', sans-serif; touch-action: none; overscroll-behavior: none; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
-        
-        .score-board { display: flex; justify-content: space-between; width: 100%; padding: 15px; }
-        .player-panel { width: 48%; background: rgba(0,0,0,0.8); border-radius: 15px; padding: 10px; border: 3px solid #333; transition: 0.3s; }
-        .player-panel h2 { margin: 0 0 10px 0; font-size: 16px; color: #aaa; text-align: center; }
-        
-        .panel-p1.active { border-color: #00a8ff; box-shadow: 0 0 15px rgba(0,168,255,0.8); }
-        .panel-p1.active h2 { color: #00a8ff; text-shadow: 0 0 5px #00a8ff; }
-        .panel-p2.active { border-color: #e84118; box-shadow: 0 0 15px rgba(232,65,24,0.8); }
-        .panel-p2.active h2 { color: #e84118; text-shadow: 0 0 5px #e84118; }
-
-        .inventory { display: flex; flex-wrap: wrap; gap: 5px; min-height: 30px; justify-content: center; }
-        .inv-item { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 5px #000; animation: pop 0.3s; }
-        @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
-
-        #turn-banner { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; font-weight: 900; color: #fff; text-shadow: 0 5px 15px #000; opacity: 0; transition: 0.3s; text-align: center; white-space: nowrap; pointer-events: none; }
-        
-        #touch-left { position: absolute; top: 0; left: 0; width: 50%; height: 100%; pointer-events: auto; }
-        #touch-right { position: absolute; top: 0; right: 0; width: 50%; height: 100%; pointer-events: auto; display: flex; align-items: flex-end; justify-content: flex-end; padding: 30px; }
-        
-        #joy-base { position: absolute; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); transform: translate(-50%, -50%); display: none; pointer-events: none; }
-        #joy-stick { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); pointer-events: none; }
-        #grab-btn { width: 90px; height: 90px; border-radius: 50%; background: #ff4757; border: 4px solid #fff; font-size: 20px; font-weight: 900; color: white; display: flex; justify-content: center; align-items: center; pointer-events: auto; transition: 0.1s; }
-        #grab-btn:active { transform: scale(0.9); }
-
-        #game-over { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; }
-        #game-over h1 { font-size: 50px; color: #fbc531; margin-bottom: 10px; text-shadow: 0 5px 15px #000; }
-        #game-over p { color: #fff; font-size: 18px; margin-bottom: 30px; }
-        #restart-btn { padding: 15px 40px; font-size: 24px; font-weight: bold; background: #4cd137; color: white; border: none; border-radius: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); cursor: pointer; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>2인 대결 인형뽑기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  * { box-sizing:border-box; user-select:none; outline:none; -webkit-touch-callout:none; }
+  body { margin:0; overflow:hidden; background:#1A1A1A; font-family:sans-serif; touch-action:none; }
+  #ui { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; display:flex; flex-direction:column; justify-content:space-between; }
+  .board { display:flex; justify-content:space-between; padding:20px 15px; gap:10px; }
+  .panel { width:48%; background:rgba(30,30,30,0.85); border-radius:12px; padding:12px; border:2px solid transparent; transition:0.3s; }
+  .panel h2 { margin:0 0 10px; font-size:14px; color:#BDC3C7; text-align:center; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .icon { width:20px; height:20px; border-radius:50%; border:2px solid #fff; }
+  .p1.active { border-color:#3498DB; box-shadow:0 0 15px rgba(52,152,219,0.5); } .p1.active h2 { color:#3498DB; }
+  .p2.active { border-color:#E74C3C; box-shadow:0 0 15px rgba(231,76,60,0.5); } .p2.active h2 { color:#E74C3C; }
+  .inv { display:flex; flex-wrap:wrap; gap:6px; min-height:28px; justify-content:center; align-items:center; }
+  .inv-item { width:20px; height:20px; border-radius:50%; border:2px solid #fff; }
+  #banner { position:absolute; top:30%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:bold; color:#FFF; background:rgba(0,0,0,0.8); padding:10px 25px; border-radius:8px; opacity:0; transition:0.2s; pointer-events:none; }
+  #touch-l { position:absolute; top:0; left:0; width:50%; height:100%; pointer-events:auto; }
+  #touch-r { position:absolute; top:0; right:0; width:50%; height:100%; pointer-events:auto; display:flex; align-items:flex-end; justify-content:flex-end; padding:30px; }
+  #joy-bg { position:absolute; width:100px; height:100px; border-radius:50%; background:rgba(255,255,255,0.1); border:2px solid rgba(255,255,255,0.4); transform:translate(-50%,-50%); display:none; pointer-events:none; }
+  #joy-st { position:absolute; top:50%; left:50%; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,0.9); transform:translate(-50%,-50%); pointer-events:none; }
+  #btn { width:85px; height:85px; border-radius:50%; background:#34495E; border:3px solid #BDC3C7; font-size:16px; font-weight:bold; color:#FFF; display:flex; justify-content:center; align-items:center; pointer-events:auto; }
+  #btn:active { transform:scale(0.9); background:#2C3E50; }
+  #over { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(20,20,20,0.95); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:100; pointer-events:auto; }
+  #over h1 { font-size:40px; color:#F1C40F; margin-bottom:10px; } #over p { color:#BDC3C7; margin-bottom:30px; }
+  #rst-btn { padding:12px 35px; font-size:18px; font-weight:bold; background:#2ECC71; color:#FFF; border:none; border-radius:6px; }
+</style>
 </head>
 <body>
 
-<div id="ui-layer">
-    <div class="score-board">
-        <div class="player-panel panel-p1 active" id="panel-1">
-            <h2>1P (파랑팀)</h2><div class="inventory" id="inv-1"></div>
-        </div>
-        <div class="player-panel panel-p2" id="panel-2">
-            <h2>2P (빨강팀)</h2><div class="inventory" id="inv-2"></div>
-        </div>
-    </div>
-    <div id="turn-banner">1P 시작!</div>
-    <div id="touch-left"><div id="joy-base"><div id="joy-stick"></div></div></div>
-    <div id="touch-right"><div id="grab-btn">CATCH</div></div>
+<div id="ui">
+  <div class="board">
+    <div class="panel p1" id="pan1"><h2>1P TARGET <div class="icon" id="ic1"></div></h2><div class="inv" id="inv1"></div></div>
+    <div class="panel p2" id="pan2"><h2>2P TARGET <div class="icon" id="ic2"></div></h2><div class="inv" id="inv2"></div></div>
+  </div>
+  <div id="banner">1P START</div>
+  <div id="touch-l"><div id="joy-bg"><div id="joy-st"></div></div></div>
+  <div id="touch-r"><div id="btn">CATCH</div></div>
 </div>
 
-<div id="game-over">
-    <h1 id="win-title">1P 승리!</h1><p>같은 색상 인형 3개를 모았습니다!</p>
-    <button id="restart-btn">다시 대결하기</button>
-</div>
+<div id="over"><h1 id="win-txt">1P WIN</h1><p>타겟 곰인형 2개 수집 완료!</p><button id="rst-btn">REMATCH</button></div>
 
 <script>
-const App = {
-    scene: new THREE.Scene(),
-    camera: new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100),
-    renderer: new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }),
-    clock: new THREE.Clock(),
-    baseCamPos: new THREE.Vector3(0, 26, 32),
+// 1. Scene 설정
+const sc = new THREE.Scene(); sc.background = new THREE.Color('#1E1E1E');
+const cam = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 100);
+const rnd = new THREE.WebGLRenderer({antialias:true}); rnd.setSize(innerWidth, innerHeight); rnd.shadowMap.enabled=true;
+document.body.appendChild(rnd.domElement);
+sc.add(new THREE.AmbientLight(0xffffff, 0.7));
+const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(10,30,15); dl.castShadow=true; sc.add(dl);
 
-    init() {
-        this.scene.background = new THREE.Color('#0d1117');
-        this.camera.position.copy(this.baseCamPos); 
-        this.camera.lookAt(0, 5, 0);
+// 2. 맵 제작
+const mkMsh = (g, m, p, r=[0,0,0], cast=false) => { let ms=new THREE.Mesh(g,m); ms.position.set(...p); ms.rotation.set(...r); ms.castShadow=cast; sc.add(ms); return ms; };
+mkMsh(new THREE.PlaneGeometry(24,24), new THREE.MeshStandardMaterial({color:'#555'}), [0,0,0], [-1.57,0,0]).receiveShadow=true;
+mkMsh(new THREE.PlaneGeometry(7,7), new THREE.MeshBasicMaterial({color:'#000'}), [-8.5,0.01,8.5], [-1.57,0,0]);
+sc.add(new THREE.BoxHelper(new THREE.Mesh(new THREE.BoxGeometry(24,20,24)), 0x888888).translateY(10));
 
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFShadowMap; 
-        document.body.appendChild(this.renderer.domElement);
+// 3. 자원 공유 (곰인형 조립)
+const CLRS = ['#E74C3C', '#3498DB', '#F1C40F', '#2ECC71'];
+const G = { h:new THREE.SphereGeometry(0.7,16,16), b:new THREE.CapsuleGeometry(0.6,0.8,16,16), e:new THREE.SphereGeometry(0.25,12,12), a:new THREE.CapsuleGeometry(0.2,0.6,12,12), l:new THREE.CapsuleGeometry(0.25,0.6,12,12), y:new THREE.SphereGeometry(0.08,8,8), s:new THREE.SphereGeometry(0.3,12,12) };
+const ME = new THREE.MeshBasicMaterial({color:'#111'}), MS = new THREE.MeshStandardMaterial({color:'#FFF'});
 
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const spotLight = new THREE.SpotLight(0xffffff, 1.0);
-        spotLight.position.set(0, 30, 10);
-        spotLight.castShadow = true;
-        spotLight.shadow.mapSize.width = 512; 
-        spotLight.shadow.mapSize.height = 512;
-        this.scene.add(spotLight);
-
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    }
-};
-App.init();
-
-const Shared = {
-    prizeGeo: new THREE.DodecahedronGeometry(1.3, 0),
-    materials: {
-        '#e84118': new THREE.MeshLambertMaterial({ color: '#e84118' }), 
-        '#00a8ff': new THREE.MeshLambertMaterial({ color: '#00a8ff' }),
-        '#fbc531': new THREE.MeshLambertMaterial({ color: '#fbc531' }),
-        '#4cd137': new THREE.MeshLambertMaterial({ color: '#4cd137' })
-    },
-    colors: ['#e84118', '#00a8ff', '#fbc531', '#4cd137'],
-    metalMat: new THREE.MeshPhongMaterial({ color: '#dcdde1', shininess: 50 }),
-    darkMat: new THREE.MeshLambertMaterial({ color: '#1e272e' }) 
-};
-
-const World = {
-    prizes: [],
-    crane: new THREE.Group(),
-    arms: [],
-
-    build() {
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), Shared.darkMat);
-        floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; App.scene.add(floor);
-
-        const chute = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ color: '#000' }));
-        chute.rotation.x = -Math.PI / 2; chute.position.set(-8.5, 0.1, 8.5); App.scene.add(chute);
-        App.scene.add(new THREE.BoxHelper(new THREE.Mesh(new THREE.BoxGeometry(24, 20, 24)), 0x00e5ff).translateY(10));
-
-        this.crane.position.set(0, 18, 0); App.scene.add(this.crane);
-        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), new THREE.MeshBasicMaterial({ color: '#fff' }));
-        this.crane.add(string);
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1, 1.5), Shared.metalMat); 
-        this.crane.add(base);
-
-        for(let i=0; i<3; i++) {
-            const pivot = new THREE.Group(); pivot.rotation.y = (i * Math.PI * 2) / 3;
-            const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.05, 4), Shared.metalMat);
-            arm.position.set(1.5, -1.5, 0); pivot.add(arm); this.crane.add(pivot); this.arms.push(pivot);
-        }
-        
-        this.stringRef = string;
-    },
-
-    spawnPrize(x, z) {
-        const color = Shared.colors[Math.floor(Math.random() * Shared.colors.length)];
-        const mesh = new THREE.Mesh(Shared.prizeGeo, Shared.materials[color]); 
-        mesh.position.set(x, 1.3, z); mesh.castShadow = true;
-        App.scene.add(mesh);
-        // ★ 소유자(owner) 속성 추가: 1 또는 2
-        this.prizes.push({ mesh, isCaught: false, velocityY: 0, colorHex: color, owner: null });
-    },
-
-    resetPrizes() {
-        this.prizes.forEach(p => App.scene.remove(p.mesh));
-        this.prizes.length = 0;
-        for(let i=0; i<30; i++) {
-            let px = (Math.random() - 0.5) * 20; let pz = (Math.random() - 0.5) * 20;
-            if(px < -5 && pz > 5) { px += 8; pz -= 8; } 
-            this.spawnPrize(px, pz);
-        }
-    }
-};
-World.build();
-World.resetPrizes();
-
-const Input = {
-    moveVec: { x: 0, y: 0 },
-    active: false,
-    origin: { x: 0, y: 0 },
-    maxRadius: 40,
-    
-    init() {
-        const touchLeft = document.getElementById('touch-left');
-        const joyBase = document.getElementById('joy-base');
-        const joyStick = document.getElementById('joy-stick');
-
-        const updateJoy = (x, y) => {
-            if(!this.active) return;
-            let dx = x - this.origin.x, dy = y - this.origin.y;
-            const dist = Math.min(Math.hypot(dx, dy), this.maxRadius);
-            const angle = Math.atan2(dy, dx);
-            const nx = Math.cos(angle)*dist, ny = Math.sin(angle)*dist;
-            joyStick.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
-            this.moveVec.x = nx/this.maxRadius; this.moveVec.y = ny/this.maxRadius;
-        };
-
-        const startJoy = (x, y) => { this.active = true; this.origin = {x, y}; joyBase.style.left = x+'px'; joyBase.style.top = y+'px'; joyBase.style.display = 'block'; };
-        const endJoy = () => { this.active = false; this.moveVec = {x:0, y:0}; joyBase.style.display = 'none'; joyStick.style.transform = `translate(-50%, -50%)`; };
-
-        touchLeft.addEventListener('touchstart', (e) => { e.preventDefault(); startJoy(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
-        touchLeft.addEventListener('touchmove', (e) => { e.preventDefault(); updateJoy(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
-        touchLeft.addEventListener('touchend', (e) => { e.preventDefault(); endJoy(); });
-        
-        touchLeft.addEventListener('mousedown', (e) => startJoy(e.clientX, e.clientY));
-        window.addEventListener('mousemove', (e) => updateJoy(e.clientX, e.clientY));
-        window.addEventListener('mouseup', endJoy);
-    }
-};
-Input.init();
-
-const Game = {
-    state: 'IDLE', 
-    height: 18,
-    clawAngle: 0.5,
-    caught: null,
-    
-    player: 1,
-    isOver: false,
-    inventory: { 1: {}, 2: {} },
-
-    init() {
-        document.getElementById('grab-btn').addEventListener('touchstart', (e) => { e.preventDefault(); this.grab(); }, {passive: false});
-        document.getElementById('grab-btn').addEventListener('mousedown', () => this.grab());
-        document.getElementById('restart-btn').addEventListener('click', () => this.restart());
-    },
-
-    grab() { if(this.state === 'IDLE' && !this.isOver) this.state = 'DOWN'; },
-
-    showBanner(text, color) {
-        const b = document.getElementById('turn-banner');
-        b.innerText = text; b.style.color = color; b.style.opacity = 1;
-        setTimeout(() => b.style.opacity = 0, 1500);
-    },
-
-    switchTurn() {
-        if(this.isOver) return;
-        this.player = this.player === 1 ? 2 : 1;
-        document.getElementById('panel-1').classList.toggle('active', this.player === 1);
-        document.getElementById('panel-2').classList.toggle('active', this.player === 2);
-        this.showBanner(`${this.player}P TURN!`, this.player === 1 ? "#00a8ff" : "#e84118");
-    },
-
-    // ★ 점수 판정 시 '현재 턴 플레이어'가 아니라 '인형의 소유자(owner)'를 기준으로 점수를 줍니다.
-    addScore(colorHex, targetPlayer) {
-        if(this.isOver) return;
-        
-        const invDiv = document.getElementById(`inv-${targetPlayer}`);
-        const item = document.createElement('div');
-        item.className = 'inv-item'; item.style.backgroundColor = colorHex;
-        invDiv.appendChild(item);
-
-        if (!this.inventory[targetPlayer][colorHex]) this.inventory[targetPlayer][colorHex] = 0;
-        this.inventory[targetPlayer][colorHex]++;
-
-        if (this.inventory[targetPlayer][colorHex] >= 3) {
-            this.isOver = true;
-            document.getElementById('game-over').style.display = 'flex';
-            const title = document.getElementById('win-title');
-            title.innerText = `${targetPlayer}P 승리!`;
-            title.style.color = targetPlayer === 1 ? "#00a8ff" : "#e84118";
-        }
-    },
-
-    restart() {
-        this.isOver = false; this.player = 1; this.inventory = { 1: {}, 2: {} };
-        document.getElementById('inv-1').innerHTML = ''; document.getElementById('inv-2').innerHTML = '';
-        document.getElementById('game-over').style.display = 'none';
-        document.getElementById('panel-1').classList.add('active'); document.getElementById('panel-2').classList.remove('active');
-        World.resetPrizes();
-        this.showBanner("1P 시작!", "#00a8ff");
-    },
-
-    update(dt) {
-        if(this.isOver) return;
-
-        if(this.state === 'IDLE') {
-            World.crane.position.x += Input.moveVec.x * 12 * dt;
-            World.crane.position.z += Input.moveVec.y * 12 * dt;
-            World.crane.position.x = THREE.MathUtils.clamp(World.crane.position.x, -11, 11);
-            World.crane.position.z = THREE.MathUtils.clamp(World.crane.position.z, -11, 11);
-            this.clawAngle = THREE.MathUtils.lerp(this.clawAngle, 0.55, 10 * dt);
-        } 
-        else if(this.state === 'DOWN') {
-            this.height -= 15 * dt;
-            if(this.height <= 4) { this.height = 4; this.state = 'GRAB'; }
-        }
-        else if(this.state === 'GRAB') {
-            this.clawAngle -= 2 * dt;
-            if(this.clawAngle <= 0.05) {
-                this.clawAngle = 0.05;
-                let closest = null, minDist = 2.5; 
-                for(let p of World.prizes) {
-                    const dist = Math.hypot(p.mesh.position.x - World.crane.position.x, p.mesh.position.z - World.crane.position.z);
-                    if(dist < minDist) { minDist = dist; closest = p; }
-                }
-                if(closest) { 
-                    this.caught = closest; 
-                    this.caught.isCaught = true; 
-                    // ★ 잡는 순간! 이 인형의 소유자(owner)를 현재 조작 중인 플레이어로 각인시킵니다.
-                    this.caught.owner = this.player; 
-                }
-                this.state = 'UP';
-            }
-        }
-        else if(this.state === 'UP') {
-            this.height += 12 * dt;
-            if(this.caught) {
-                this.caught.mesh.position.set(World.crane.position.x, this.height - 3, World.crane.position.z);
-                if(this.height > 8 && Math.random() < 0.015) { this.caught.isCaught = false; this.caught = null; this.clawAngle = 0.35; }
-            }
-            if(this.height >= 18) { this.height = 18; this.state = 'RETURN'; }
-        }
-        else if(this.state === 'RETURN') {
-            World.crane.position.x = THREE.MathUtils.lerp(World.crane.position.x, -8.5, 4 * dt);
-            World.crane.position.z = THREE.MathUtils.lerp(World.crane.position.z, 8.5, 4 * dt);
-            if(this.caught) {
-                this.caught.mesh.position.set(World.crane.position.x, this.height - 3, World.crane.position.z);
-                if(Math.random() < 0.008) { this.caught.isCaught = false; this.caught = null; this.clawAngle = 0.35; }
-            }
-            if(Math.abs(World.crane.position.x - (-8.5)) < 0.5 && Math.abs(World.crane.position.z - 8.5) < 0.5) this.state = 'RELEASE';
-        }
-        else if(this.state === 'RELEASE') {
-            this.clawAngle += 3 * dt;
-            if(this.clawAngle >= 0.6) {
-                this.clawAngle = 0.6;
-                if(this.caught) { this.caught.isCaught = false; this.caught = null; }
-                this.state = 'IDLE';
-                this.switchTurn(); 
-            }
-        }
-
-        // 인형 물리 및 배출구 판정
-        for(let i = World.prizes.length - 1; i >= 0; i--) {
-            let p = World.prizes[i];
-            if(!p.isCaught) {
-                p.velocityY -= 30 * dt; 
-                p.mesh.position.y += p.velocityY * dt;
-                
-                const isOverChute = (p.mesh.position.x < -5 && p.mesh.position.z > 5);
-                if(!isOverChute && p.mesh.position.y <= 1.3) {
-                    p.mesh.position.y = 1.3; p.velocityY = 0;
-                } 
-                else if (isOverChute && p.mesh.position.y < -5) {
-                    // ★ 인형이 누구 것인지(owner) 확인 후 그 사람 점수 올려줌 (없으면 현재 플레이어)
-                    const targetPlayer = p.owner ? p.owner : this.player;
-                    this.addScore(p.colorHex, targetPlayer); 
-                    
-                    App.scene.remove(p.mesh);
-                    World.prizes.splice(i, 1);
-                }
-            }
-        }
-
-        World.crane.position.y = this.height;
-        World.stringRef.position.y = (24 - this.height) / 2;
-        World.stringRef.scale.y = 24 - this.height;
-        World.arms.forEach(arm => arm.children[0].rotation.z = this.clawAngle);
-
-        const targetCamZ = App.baseCamPos.z + (World.crane.position.z * 0.1) - (18 - this.height) * 0.2;
-        App.camera.position.x = THREE.MathUtils.lerp(App.camera.position.x, App.baseCamPos.x + (World.crane.position.x * 0.1), 5 * dt);
-        App.camera.position.z = THREE.MathUtils.lerp(App.camera.position.z, targetCamZ, 5 * dt);
-        App.camera.lookAt(0, 5, 0);
-    }
-};
-Game.init();
-
-function animate() {
-    requestAnimationFrame(animate);
-    const dt = Math.min(App.clock.getDelta(), 0.05); 
-    Game.update(dt);
-    App.renderer.render(App.scene, App.camera);
+function mkBear(col) {
+  const gr = new THREE.Group(), mat = new THREE.MeshStandardMaterial({color:col, roughness:1});
+  const add = (geo, m, p, r=[0,0,0])=>{ let ms=new THREE.Mesh(geo,m); ms.position.set(...p); ms.rotation.set(...r); ms.castShadow=true; gr.add(ms); };
+  add(G.h,mat,[0,1.4,0]); add(G.b,mat,[0,0.5,0]); add(G.s,MS,[0,1.25,0.65]); add(G.y,ME,[0,1.35,0.9]);
+  [[-1,1],[1,-1]].forEach(d=>{ add(G.e,mat,[d[0]*0.5,1.9,0]); add(G.a,mat,[d[0]*0.7,0.8,0],[0,0,d[1]*0.5]); add(G.l,mat,[d[0]*0.4,0,0.3],[-0.5,0,0]); });
+  [[-1],[1]].forEach(d=>add(G.y,ME,[d[0]*0.25,1.5,0.6]));
+  sc.add(gr); return gr;
 }
-animate();
 
+// 4. 오브젝트 풀링 (35개 미리 만들고 재활용)
+const prizes = Array.from({length:35}).map(()=>{
+  let c = CLRS[Math.floor(Math.random()*4)], m = mkBear(c);
+  let p = { m:m, c:c, vy:0, st:'idle', own:null }; rstPz(p); return p;
+});
+function rstPz(p) {
+  let x,z; do{ x=(Math.random()-0.5)*20; z=(Math.random()-0.5)*20; }while(x<-5 && z>5);
+  p.m.position.set(x, 1, z); p.m.rotation.set((Math.random()>0.5?-1.5:0)+Math.random()*0.4, Math.random()*6, 0);
+  p.vy=0; p.st='idle'; p.own=null;
+}
+
+// 5. 크레인
+const crn = new THREE.Group(); crn.position.set(0,18,0); sc.add(crn);
+const cMat = new THREE.MeshStandardMaterial({color:'#AAA', metalness:0.4});
+const stMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1), new THREE.MeshBasicMaterial({color:'#CCC'})); crn.add(stMesh);
+crn.add(new THREE.Mesh(new THREE.CylinderGeometry(1.2,0.8,1.2), cMat));
+const arms = [0,1,2].map(i=>{ let gr=new THREE.Group(); gr.rotation.y=i*2.09; let a=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.05,4), cMat); a.position.set(1.2,-1.6,0); gr.add(a); crn.add(gr); return gr; });
+
+// 6. 입력 (조이스틱)
+const Inp = { v:{x:0,y:0}, on:false, ox:0, oy:0 };
+const tl=document.getElementById('touch-l'), jb=document.getElementById('joy-bg'), js=document.getElementById('joy-st');
+const upd=(x,y)=>{ if(!Inp.on)return; let dx=x-Inp.ox, dy=y-Inp.oy, dt=Math.min(Math.hypot(dx,dy),40), ag=Math.atan2(dy,dx); let nx=Math.cos(ag)*dt, ny=Math.sin(ag)*dt; js.style.transform=`translate(calc(-50% + ${nx}px),calc(-50% + ${ny}px))`; Inp.v={x:nx/40, y:ny/40}; };
+const st=(x,y)=>{ Inp.on=true; Inp.ox=x; Inp.oy=y; jb.style.left=x+'px'; jb.style.top=y+'px'; jb.style.display='block'; };
+const en=()=>{ Inp.on=false; Inp.v={x:0,y:0}; jb.style.display='none'; js.style.transform='translate(-50%,-50%)'; };
+tl.addEventListener('touchstart',e=>{e.preventDefault();st(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+tl.addEventListener('touchmove',e=>{e.preventDefault();upd(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+tl.addEventListener('touchend',e=>{e.preventDefault();en();}); tl.addEventListener('mousedown',e=>st(e.clientX,e.clientY)); window.addEventListener('mousemove',e=>upd(e.clientX,e.clientY)); window.addEventListener('mouseup',en);
+
+// 7. 게임 로직
+const G = {
+  st:'IDLE', h:18, ag:0.5, cgt:null, p:1, over:false, tg:{1:'',2:''}, sc:{1:0,2:0},
+  msg(txt, col="#FFF") { const m=document.getElementById('banner'); m.innerText=txt; m.style.border=`2px solid ${col}`; m.style.color=col; m.style.opacity=1; setTimeout(()=>m.style.opacity=0, 1200); },
+  turn() { if(this.over)return; this.p = this.p===1?2:1; document.getElementById('pan1').className=`panel p1 ${this.p===1?'active':''}`; document.getElementById('pan2').className=`panel p2 ${this.p===2?'active':''}`; this.msg(`${this.p}P TURN`, this.p===1?"#3498DB":"#E74C3C"); },
+  updUI(p) { const d=document.getElementById(`inv${p}`); d.innerHTML=''; for(let i=0;i<this.sc[p];i++){ let div=document.createElement('div'); div.className='inv-item'; div.style.backgroundColor=this.tg[p]; d.appendChild(div); } },
+  drop(c, tp) {
+    if(this.over)return;
+    if(c === this.tg[tp]) {
+      this.sc[tp]++; this.updUI(tp); this.msg("SUCCESS", "#2ECC71");
+      if(this.sc[tp]>=2){ this.over=true; document.getElementById('over').style.display='flex'; document.getElementById('win-txt').innerText=`${tp}P WIN`; document.getElementById('win-txt').style.color=tp===1?"#3498DB":"#E74C3C"; }
+    } else { this.msg("PENALTY -1", "#E74C3C"); if(this.sc[tp]>0){ this.sc[tp]--; this.updUI(tp); } }
+  },
+  rst() {
+    this.over=false; this.p=1; this.sc={1:0,2:0}; let s=[...CLRS].sort(()=>0.5-Math.random()); this.tg={1:s[0],2:s[1]};
+    document.getElementById('ic1').style.backgroundColor=s[0]; document.getElementById('ic2').style.backgroundColor=s[1];
+    this.updUI(1); this.updUI(2); document.getElementById('over').style.display='none';
+    document.getElementById('pan1').className='panel p1 active'; document.getElementById('pan2').className='panel p2';
+    prizes.forEach(p=>rstPz(p)); setTimeout(()=>this.msg("1P START", "#3498DB"), 500);
+  }
+};
+
+document.getElementById('btn').addEventListener('touchstart',e=>{e.preventDefault();if(G.st==='IDLE'&&!G.over)G.st='DOWN';},{passive:false});
+document.getElementById('btn').addEventListener('mousedown',()=>{if(G.st==='IDLE'&&!G.over)G.st='DOWN';});
+document.getElementById('rst-btn').addEventListener('click',()=>G.rst()); G.rst();
+
+const clk = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop); const dt = Math.min(clk.getDelta(), 0.05);
+  if(G.over){ rnd.render(sc, cam); return; }
+
+  if(G.st==='IDLE'){
+    crn.position.x += Inp.v.x*12*dt; crn.position.z += Inp.v.y*12*dt;
+    crn.position.x = Math.max(-11, Math.min(11, crn.position.x)); crn.position.z = Math.max(-11, Math.min(11, crn.position.z));
+    G.ag += (0.55 - G.ag) * 10 * dt;
+  }else if(G.st==='DOWN'){ G.h -= 15*dt; if(G.h<=3.8){ G.h=3.8; G.st='GRAB'; }
+  }else if(G.st==='GRAB'){ G.ag -= 2*dt; if(G.ag<=0.05){ G.ag=0.05; let cl=null, md=2.8; prizes.forEach(p=>{ if(p.st==='idle'){ let d=Math.hypot(p.m.position.x-crn.position.x, p.m.position.z-crn.position.z); if(d<md){md=d;cl=p;} } }); if(cl){ G.cgt=cl; cl.st='cgt'; cl.own=G.p; } G.st='UP'; }
+  }else if(G.st==='UP'){ G.h += 12*dt; if(G.cgt){ G.cgt.m.position.set(crn.position.x, G.h-2.8, crn.position.z); if(G.h>8&&Math.random()<0.015){G.cgt.st='fall'; G.cgt=null; G.ag=0.35;} } if(G.h>=18){ G.h=18; G.st='RETURN'; }
+  }else if(G.st==='RETURN'){ crn.position.x += (-8.5-crn.position.x)*4*dt; crn.position.z += (8.5-crn.position.z)*4*dt; if(G.cgt){ G.cgt.m.position.set(crn.position.x, G.h-2.8, crn.position.z); if(Math.random()<0.008){G.cgt.st='fall'; G.cgt=null; G.ag=0.35;} } if(Math.abs(crn.position.x - -8.5)<0.5 && Math.abs(crn.position.z - 8.5)<0.5) G.st='RELEASE';
+  }else if(G.st==='RELEASE'){ G.ag+=3*dt; if(G.ag>=0.6){ G.ag=0.6; if(G.cgt){G.cgt.st='fall';G.cgt=null;} G.st='IDLE'; G.turn(); } }
+
+  prizes.forEach(p => {
+    if(p.st==='idle' || p.st==='fall') {
+      p.vy -= 30*dt; p.m.position.y += p.vy*dt;
+      if(p.m.position.x < -5 && p.m.position.z > 5) {
+        if(p.m.position.y < -5) { G.drop(p.c, p.own||G.p); rstPz(p); } 
+      } else if(p.m.position.y <= 1.0) { p.m.position.y = 1.0; p.vy = 0; p.st='idle'; }
+    }
+  });
+
+  crn.position.y = G.h; stMesh.position.y=(24-G.h)/2; stMesh.scale.y=24-G.h; arms.forEach(a=>a.children[0].rotation.z=G.ag);
+  cam.position.x += (crn.position.x*0.1 - cam.position.x)*5*dt;
+  cam.position.z += (32 + crn.position.z*0.1 - (18-G.h)*0.2 - cam.position.z)*5*dt; cam.lookAt(0,3,0);
+  rnd.render(sc, cam);
+}
+loop();
 </script>
 </body>
 </html>
